@@ -6,14 +6,19 @@ namespace WVCore.Server
     internal class RequestHandler
     {
         static Logger logger = LogManager.GetCurrentClassLogger();
-
+        
         public static async Task<IResult> HandleCommon(HttpRequest request, WVApi wvApi)
         {
             try
             {
                 var apiReqeust = await request.ReadFromJsonAsync<ApiRequest>();
                 logger.Info(request.Path + " ==> " + Util.ConvertToJson(apiReqeust));
-                var keys = await WVUtil.GetKeysAsync(apiReqeust.PSSH, apiReqeust.LicenseUrl, apiReqeust.Headers, wvApi);
+                var keys = await WVUtil.GetKeysAsync(
+                    apiReqeust.PSSH,
+                    apiReqeust.LicenseUrl,
+                    apiReqeust.Headers,
+                    wvApi,
+                    apiReqeust.Proxy);   // NUEVO: pasa el proxy
                 var apiResponse = new ApiResponse()
                 {
                     PSSH = apiReqeust.PSSH,
