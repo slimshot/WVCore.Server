@@ -34,22 +34,45 @@ namespace WVCore.Server
             Timeout = TimeSpan.FromMinutes(5)
         };
 
-        public static async Task<byte[]> PostDataAsync(string URL, Dictionary<string, string> headers, byte[] postData)
+        public static HttpClient GetHttpClient(string? proxyUrl = null)
+        {
+            if (string.IsNullOrWhiteSpace(proxyUrl))
+                return AppHttpClient;
+        
+            var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                AutomaticDecompression = DecompressionMethods.All,
+                ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+                Proxy = new WebProxy(proxyUrl, bypassOnLocal: false),
+                UseProxy = true
+            };
+            return new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
+        }
+        
+        public static async Task<byte[]> PostDataAsync(
+            string URL,
+            Dictionary<string, string> headers,
+            byte[] postData,
+            string? proxyUrl = null) 
         {
             logger.Debug($"Post to: {URL}");
             logger.Debug($"Post data: {Util.BytesToHex(postData, " ")}");
             ByteArrayContent content = new ByteArrayContent(postData);
             if (headers.TryGetValue("Content-Type", out var contentType))
-            {
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
-            }
-            HttpResponseMessage response = await PostAsync(URL, headers, content);
+        
+            HttpResponseMessage response = await PostAsync(URL, headers, content, proxyUrl);
             byte[] bytes = await response.Content.ReadAsByteArrayAsync();
             logger.Debug($"Recv data: {Util.BytesToHex(bytes, " ")}");
             return bytes;
         }
-
-        private static async Task<HttpResponseMessage> PostAsync(string URL, Dictionary<string, string> headers, HttpContent content)
+        
+        private static async Task<HttpResponseMessage> PostAsync(
+            string URL,
+            Dictionary<string, string> headers,
+            HttpContent content,
+            string? proxyUrl = null) 
         {
             HttpRequestMessage request = new HttpRequestMessage()
             {
@@ -57,16 +80,17 @@ namespace WVCore.Server
                 Method = HttpMethod.Post,
                 Content = content
             };
-
+        
             if (headers != null)
                 foreach (KeyValuePair<string, string> header in headers)
                     request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-
+        
             logger.Debug(request.Headers.ToString());
-
-            return await SendAsync(request);
+        
+            var client = GetHttpClient(proxyUrl);
+            return await client.SendAsync(request);
         }
-
+        
         static async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)
         {
             return await AppHttpClient.SendAsync(request);
