@@ -25,5 +25,6 @@ namespace WVCore.Server
         public string PSSH { get; set; }
         public Dictionary<string, string> Headers { get; set; }
         public string LicenseUrl { get; set; }
+        public string? Proxy { get; set; }
     }
 }
