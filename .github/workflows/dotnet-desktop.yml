@@ -1,0 +1,84 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.rid }}
+
+    steps:
+      - name: Checkout WVCore.Server
+        uses: actions/checkout@v4
+        with:
+          path: WVCore.Server
+
+      - name: Checkout WVCore
+        uses: actions/checkout@v4
+        with:
+          repository: nilaoda/WVCore
+          path: WVCore
+
+      - name: Setup .NET 7
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "7.0.x"
+
+      - name: Install Native AOT dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish
+        working-directory: WVCore.Server
+        run: dotnet publish -r ${{ matrix.rid }} -c Release -o out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WVCore.Server-${{ matrix.rid }}
+          path: WVCore.Server/out/
+          retention-days: 30
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Zip artifacts
+        run: |
+          cd artifacts
+          zip -r ../WVCore.Server-win-x64.zip WVCore.Server-win-x64/
+          zip -r ../WVCore.Server-linux-x64.zip WVCore.Server-linux-x64/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            WVCore.Server-win-x64.zip
+            WVCore.Server-linux-x64.zip
+          generate_release_notes: true
