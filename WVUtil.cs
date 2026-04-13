@@ -12,28 +12,31 @@ namespace WVCore.Server
     {
         static Logger logger = LogManager.GetCurrentClassLogger();
 
-        public static async Task<List<string>> GetKeysAsync(string pssh, string licenseUrl, Dictionary<string, string>? headers, WVApi cdm)
+        public static async Task<List<string>> GetKeysAsync(
+            string pssh,
+            string licenseUrl,
+            Dictionary<string, string>? headers,
+            WVApi cdm,
+            string? proxyUrl = null)  
         {
             var keyStrings = new List<string>();
             if (headers == null)
                 headers = new Dictionary<string, string>();
-
+        
             logger.Debug("get cert...");
-            var resp1 = await HTTPUtil.PostDataAsync(licenseUrl, headers, new byte[] { 0x08, 0x04 });
+            var resp1 = await HTTPUtil.PostDataAsync(licenseUrl, headers, new byte[] { 0x08, 0x04 }, proxyUrl);
             var certDataB64 = Convert.ToBase64String(resp1);
             logger.Debug("get challenge...");
             var challenge = cdm.GetChallenge(pssh, certDataB64, false, false);
             logger.Debug("get license...");
-            var resp2 = await HTTPUtil.PostDataAsync(licenseUrl, headers, challenge);
+            var resp2 = await HTTPUtil.PostDataAsync(licenseUrl, headers, challenge, proxyUrl);
             var licenseB64 = Convert.ToBase64String(resp2);
-            //license传递给cdm
             cdm.ProvideLicense(licenseB64);
             logger.Debug("get keys...");
             List<ContentKey> keys = cdm.GetKeys();
             foreach (var k in keys)
-            {
                 keyStrings.Add(k.ToString());
-            }
+        
             return keyStrings;
         }
     }
