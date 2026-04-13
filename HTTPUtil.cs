@@ -44,7 +44,7 @@ namespace WVCore.Server
                 AllowAutoRedirect = true,
                 AutomaticDecompression = DecompressionMethods.All,
                 ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
-                Proxy = new WebProxy(proxyUrl, bypassOnLocal: false),
+                Proxy = new WebProxy(proxyUrl, false),
                 UseProxy = true
             };
             return new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
