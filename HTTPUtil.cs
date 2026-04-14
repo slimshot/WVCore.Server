@@ -34,20 +34,25 @@ namespace WVCore.Server
             Timeout = TimeSpan.FromMinutes(5)
         };
 
+        private static readonly ConcurrentDictionary<string, HttpClient> _proxyClients = new();
+        
         public static HttpClient GetHttpClient(string? proxyUrl = null)
         {
             if (string.IsNullOrWhiteSpace(proxyUrl))
                 return AppHttpClient;
         
-            var handler = new HttpClientHandler
+            return _proxyClients.GetOrAdd(proxyUrl, url =>
             {
-                AllowAutoRedirect = true,
-                AutomaticDecompression = DecompressionMethods.All,
-                ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
-                Proxy = new WebProxy(proxyUrl, false),
-                UseProxy = true
-            };
-            return new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
+                var handler = new HttpClientHandler
+                {
+                    AllowAutoRedirect = true,
+                    AutomaticDecompression = DecompressionMethods.All,
+                    ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+                    Proxy = new WebProxy(url, false),
+                    UseProxy = true
+                };
+                return new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
+            });
         }
         
         public static async Task<byte[]> PostDataAsync(
@@ -89,11 +94,6 @@ namespace WVCore.Server
         
             var client = GetHttpClient(proxyUrl);
             return await client.SendAsync(request);
-        }
-        
-        static async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)
-        {
-            return await AppHttpClient.SendAsync(request);
         }
     }
 }
