@@ -39,10 +39,10 @@ namespace WVCore.Server
             InitLog();
             var logger = LogManager.GetCurrentClassLogger();
             logger.Debug("Log Inited.");
-
+        
             var builder = WebApplication.CreateBuilder(args);
             builder.Logging.ClearProviders();
-
+        
             builder.Services.AddCors(p =>
             {
                 p.AddDefaultPolicy(builder => builder
@@ -50,13 +50,35 @@ namespace WVCore.Server
                 .AllowAnyHeader()
                 .AllowAnyMethod());
             });
+        
+            int port = 18888;
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "--port" || args[i] == "-p")
+                {
+                    if (int.TryParse(args[i + 1], out int parsed) && parsed is > 0 and < 65536)
+                        port = parsed;
+                    break;
+                }
+            }
 
+            string bind = "0.0.0.0";
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "--bind" || args[i] == "-b")
+                {
+                    if (System.Net.IPAddress.TryParse(args[i + 1], out _))
+                        bind = args[i + 1];
+                    break;
+                }
+            }
+        
             logger.Info("The app started!");
-            logger.Info("Listening: http://0.0.0.0:18888");
-
+            logger.Info($"Listening: http://{bind}:{port}");
+            
             var app = builder.Build();
             app.UseCors();
-            app.Urls.Add("http://0.0.0.0:18888");
+            app.Urls.Add($"http://{bind}:{port}");
             app.MapGet("/wvapi", () => "Please Use POST!");
             app.MapPost("/wvapi", async (HttpRequest request) => await RequestHandler.HandleCommon(request, GetWVApi()));
             app.MapPost("/getchallenge", async (HttpRequest request) => await RequestHandler.HandleChallenge(request, GetWVApi()));
