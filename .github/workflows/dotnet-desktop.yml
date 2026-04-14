@@ -43,28 +43,9 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu:18.04
     name: linux-x64
 
     steps:
-      - name: Install base dependencies
-        run: |
-          apt-get update -qq
-          apt-get install -y \
-            curl ca-certificates git wget gnupg \
-            zlib1g-dev libicu60 libssl1.1 binutils
-
-      - name: Install clang 12 from LLVM APT
-        run: |
-          wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-          echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-12 main" \
-            >> /etc/apt/sources.list
-          apt-get update -qq
-          apt-get install -y clang-12
-          update-alternatives --install /usr/bin/clang   clang   /usr/bin/clang-12   100
-          update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-12 100
-
       - name: Checkout WVCore.Server
         uses: actions/checkout@v4
         with:
@@ -76,20 +57,48 @@ jobs:
           repository: nilaoda/WVCore
           path: WVCore
 
-      - name: Setup .NET 7
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "7.0.x"
-
-      - name: Publish
-        working-directory: WVCore.Server
-        run: dotnet publish -r linux-x64 -c Release -o out
-
-      - name: Verify glibc dependency
-        working-directory: WVCore.Server/out
+      - name: Write build script
         run: |
+          cat > /tmp/build-linux.sh << 'SCRIPT'
+          set -e
+
+          # Dependencias base
+          apt-get update -qq
+          apt-get install -y curl ca-certificates wget gnupg \
+            zlib1g-dev libicu60 libssl1.1 binutils
+
+          # clang-12 desde LLVM APT (Ubuntu 18.04 solo trae clang-6 por defecto)
+          wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+          echo "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-12 main" \
+            >> /etc/apt/sources.list
+          apt-get update -qq
+          apt-get install -y clang-12
+          update-alternatives --install /usr/bin/clang   clang   /usr/bin/clang-12 100
+          update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-12 100
+
+          # Instalar .NET 7 SDK
+          curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+          bash /tmp/dotnet-install.sh --channel 7.0 --install-dir /usr/local/dotnet
+          export PATH="$PATH:/usr/local/dotnet"
+          export DOTNET_ROOT=/usr/local/dotnet
+
+          # Compilar
+          cd /workspace/WVCore.Server
+          dotnet publish -r linux-x64 -c Release -o out
+
+          # Verificar versión máxima de glibc requerida
           echo "=== glibc versions required by binary ==="
-          objdump -p WVCore.Server | grep GLIBC || true
+          objdump -p out/WVCore.Server | grep GLIBC || true
+          SCRIPT
+          chmod +x /tmp/build-linux.sh
+
+      - name: Build inside Ubuntu 18.04 container
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "/tmp/build-linux.sh:/build-linux.sh" \
+            ubuntu:18.04 \
+            bash /build-linux.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
